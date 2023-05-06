@@ -110,8 +110,8 @@ fn main() {
                 println!("weird, no bytes read");
                 return;
             }
-            if in_buffer[1] != CmdInitAck as u8 {
-                println!("Unexpected result {:?}", in_buffer[1]);
+            if in_buffer[2] != CmdInitAck as u8 {
+                println!("Unexpected result {:?}", in_buffer[2]);
                 dump(in_buffer.as_slice(), in_buffer[0]);
                 //return;
             }
@@ -129,7 +129,7 @@ fn main() {
     out_buffer[3] = calculate_crc(out_buffer.as_slice(), 3); //checksum
     let _write_result = sniffer.write_bulk(
         out_endpoint.address(),
-        &out_buffer[0..3],
+        &out_buffer[0..4],
         Duration::from_millis(250),
     );
     dump(&out_buffer, out_buffer[0]);
@@ -145,8 +145,8 @@ fn main() {
             if n == 0 {
                 println!("weird, no bytes read");
             }
-            if in_buffer[1] != CmdSetChannelAck as u8 {
-                println!("Unexpected result {:?}", in_buffer[1]);
+            if in_buffer[2] != CmdSetChannelAck as u8 {
+                println!("Unexpected result {:?}", in_buffer[2]);
                 dump(in_buffer.as_slice(), in_buffer[0]);
                 return;
             }
