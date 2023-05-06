@@ -1,4 +1,4 @@
-use crate::CmdCodes::{CmdInit, CmdSetChannel};
+use crate::CmdCodes::{CmdGotPkt, CmdInit, CmdSetChannel, CmdSniffOn};
 use crc::{Crc, CRC_16_XMODEM};
 use rusb::{DeviceDescriptor, DeviceHandle, DeviceList, GlobalContext};
 use rusb::Direction::{In, Out};
@@ -127,6 +127,42 @@ fn main() {
 
     println!("Send CmdSetChannel 15");
     send_command(&sniffer_device, CmdSetChannel, vec![15].as_slice());
+
+    println!("Send CmdSniffOn");
+    send_command(&sniffer_device, CmdSniffOn, &[]);
+
+    println!("Looping over received packets");
+    let mut buffer = vec![0; 256];
+    let mut continue_reading = false;
+    loop {
+        let read_result = sniffer_device.handle.read_bulk(
+            sniffer_device.in_address,
+            buffer.as_mut_slice(),
+            Duration::from_millis(1000),
+        );
+        match read_result {
+            Ok(n) => {
+                if n == 0 {
+                    println!("weird, no bytes read");
+                }
+                if buffer[1] > buffer[0] {
+                    // there is more to read
+                    continue_reading  = true;
+                } else {
+                    println!()
+                }
+                dump(buffer.as_slice(), buffer[0] + 1); // extra byte
+                if buffer[2] != CmdGotPkt as u8 && !continue_reading {
+                    println!("Unexpected result {:#04x}", buffer[2]);
+                    return;
+                }
+            }
+            Err(e) => {
+                println!("read failed: {e}");
+            }
+        }
+    }
+
 }
 
 // Procedure copied from the firmware
@@ -146,7 +182,7 @@ fn dump(buffer: &[u8], len: u8) {
 }
 
 fn send_command(sniffer: &SnifferDevice, command: CmdCodes, payload: &[u8]) {
-    let mut buffer = Vec::new();
+    let mut buffer = vec![0; 256];
 
     let payload_len = payload.len();
     let ack: CmdCodes = (command as u8 + 1).into();  // hack, ack is command + 1 in the enum
@@ -174,12 +210,12 @@ fn send_command(sniffer: &SnifferDevice, command: CmdCodes, payload: &[u8]) {
             if n == 0 {
                 println!("weird, no bytes read");
             }
+            dump(buffer.as_slice(), buffer[0]+1); // Byte extra for total length
             if buffer[2] != ack as u8 {
-                println!("Unexpected result {:?}", buffer[2]);
-                dump(buffer.as_slice(), buffer[0]);
+                println!("Unexpected result {:#04x}", buffer[2]);
                 return;
             }
-            println!("CmdSetChannel OK")
+            println!("Acknowledged")
         }
         Err(e) => {
             println!("read failed: {e}");
