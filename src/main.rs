@@ -1,6 +1,6 @@
-use crate::CmdCodes::{CmdInit, CmdInitAck, CmdSetChannel, CmdSetChannelAck};
+use crate::CmdCodes::{CmdInit, CmdSetChannel};
 use crc::{Crc, CRC_16_XMODEM};
-use rusb::DeviceList;
+use rusb::{DeviceDescriptor, DeviceHandle, DeviceList, GlobalContext};
 use rusb::Direction::{In, Out};
 use std::process::exit;
 use std::time::Duration;
@@ -9,7 +9,7 @@ use hxdmp::hexdump;
 pub const CRC_16: Crc<u16> = Crc::<u16>::new(&CRC_16_XMODEM);
 
 #[repr(u8)]
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq, PartialOrd, Clone, Copy)]
 pub enum CmdCodes {
     CmdInit = 0x00,
     CmdInitAck = 0x01,
@@ -23,6 +23,35 @@ pub enum CmdCodes {
     CmdSniffOffAck = 0x09,
     CmdGotPkt = 0x0A,
     CmdErr = 0xFF,
+}
+
+impl From<u8> for CmdCodes {
+    fn from(orig: u8) -> Self {
+        return match orig {
+            0x00 => CmdInit,
+            0x01 => CmdCodes::CmdInitAck,
+            0x02 => CmdSetChannel,
+            0x03 => CmdCodes::CmdSetChannelAck,
+            0x04 => CmdCodes::CmdSendPkt,
+            0x05 => CmdCodes::CmdSendPktAck,
+            0x06 => CmdCodes::CmdSniffOn,
+            0x07 => CmdCodes::CmdSniffOnAck,
+            0x08 => CmdCodes::CmdSniffOff,
+            0x09 => CmdCodes::CmdSniffOffAck,
+            0x0A => CmdCodes::CmdGotPkt,
+            0xFF => CmdCodes::CmdErr,
+            _ => return CmdCodes::CmdErr,
+        };
+    }
+}
+
+
+
+struct SnifferDevice {
+    handle: DeviceHandle<GlobalContext>,
+    descriptor: DeviceDescriptor,
+    out_address: u8,
+    in_address: u8
 }
 
 fn main() {
@@ -86,78 +115,18 @@ fn main() {
         })
         .unwrap();
 
-    println!("Send CmdInit");
-    let mut out_buffer: Vec<u8> = vec![0; 256];
-    out_buffer[0] = 3; // length
-    out_buffer[1] = CmdInit as u8; // command
-    out_buffer[2] = calculate_crc(out_buffer.as_slice(), 2); //checksum
-    let _write_result = sniffer.write_bulk(
-        out_endpoint.address(),
-        &out_buffer[0..3],
-        Duration::from_millis(250),
-    );
-    dump(&out_buffer, out_buffer[0]);
+    let sniffer_device = SnifferDevice {
+        handle: sniffer,
+        descriptor: sniffer_device.device_descriptor().unwrap(),
+        in_address: in_endpoint.address(),
+        out_address: out_endpoint.address()
+    };
 
-    let mut in_buffer: Vec<u8> = vec![0; 256];
-    let read_result = sniffer.read_bulk(
-        in_endpoint.address(),
-        in_buffer.as_mut_slice(),
-        Duration::from_millis(250),
-    );
-    match read_result {
-        Ok(n) => {
-            if n == 0 {
-                println!("weird, no bytes read");
-                return;
-            }
-            if in_buffer[2] != CmdInitAck as u8 {
-                println!("Unexpected result {:?}", in_buffer[2]);
-                dump(in_buffer.as_slice(), in_buffer[0]);
-                //return;
-            }
-            println!("CmdInit OK")
-        }
-        Err(e) => {
-            println!("read failed: {e}");
-        }
-    }
+    println!("Send CmdInit");
+    send_command(&sniffer_device, CmdInit, &[]);
 
     println!("Send CmdSetChannel 15");
-    out_buffer[0] = 4; // length
-    out_buffer[1] = CmdSetChannel as u8; // command
-    out_buffer[2] = 15; // channel
-    out_buffer[3] = calculate_crc(out_buffer.as_slice(), 3); //checksum
-    let _write_result = sniffer.write_bulk(
-        out_endpoint.address(),
-        &out_buffer[0..4],
-        Duration::from_millis(250),
-    );
-    dump(&out_buffer, out_buffer[0]);
-
-    let mut in_buffer: Vec<u8> = vec![0; 256];
-    let read_result = sniffer.read_bulk(
-        in_endpoint.address(),
-        in_buffer.as_mut_slice(),
-        Duration::from_millis(250),
-    );
-    match read_result {
-        Ok(n) => {
-            if n == 0 {
-                println!("weird, no bytes read");
-            }
-            if in_buffer[2] != CmdSetChannelAck as u8 {
-                println!("Unexpected result {:?}", in_buffer[2]);
-                dump(in_buffer.as_slice(), in_buffer[0]);
-                return;
-            }
-            println!("CmdSetChannel OK")
-        }
-        Err(e) => {
-            println!("read failed: {e}");
-        }
-    }
-    // sniffer.unconfigure()
-    //     .expect("Unconfigure failed");
+    send_command(&sniffer_device, CmdSetChannel, vec![15].as_slice());
 }
 
 // Procedure copied from the firmware
@@ -174,4 +143,46 @@ fn dump(buffer: &[u8], len: u8) {
     hexdump(&buffer[0..len as usize], &mut outbuf)
         .expect("hexdump issue");
     println!("{}", String::from_utf8_lossy(&outbuf))
+}
+
+fn send_command(sniffer: &SnifferDevice, command: CmdCodes, payload: &[u8]) {
+    let mut buffer = Vec::new();
+
+    let payload_len = payload.len();
+    let ack: CmdCodes = (command as u8 + 1).into();  // hack, ack is command + 1 in the enum
+
+    buffer[0] = (3 + payload_len) as u8; // length
+    buffer[1] = command as u8; // command
+    buffer[2..payload_len+2].copy_from_slice(payload);
+    buffer[payload_len+2] = calculate_crc(buffer.as_slice(), buffer[0]); //checksum
+
+    let _write_result = sniffer.handle.write_bulk(
+        sniffer.out_address,
+        &buffer[0..buffer[0] as usize],
+        Duration::from_millis(250),
+    );
+    dump(&buffer, buffer[0]);
+
+
+    let read_result = sniffer.handle.read_bulk(
+        sniffer.in_address,
+        buffer.as_mut_slice(),
+        Duration::from_millis(250),
+    );
+    match read_result {
+        Ok(n) => {
+            if n == 0 {
+                println!("weird, no bytes read");
+            }
+            if buffer[2] != ack as u8 {
+                println!("Unexpected result {:?}", buffer[2]);
+                dump(buffer.as_slice(), buffer[0]);
+                return;
+            }
+            println!("CmdSetChannel OK")
+        }
+        Err(e) => {
+            println!("read failed: {e}");
+        }
+    }
 }
