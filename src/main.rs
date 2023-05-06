@@ -151,6 +151,11 @@ fn main() {
                     remaining = buffer[1];
                 }
 
+                if remaining < buffer[0] {
+                    println!("possible data loss, reset counter")
+                    remaining = buffer[1];
+                }
+
                 dump(buffer.as_slice(), buffer[0]);
                 remaining -= buffer[0];
 
