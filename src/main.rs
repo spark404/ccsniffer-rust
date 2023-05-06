@@ -133,7 +133,7 @@ fn main() {
 
     println!("Looping over received packets");
     let mut buffer = vec![0; 256];
-    let mut continue_reading = false;
+    let mut remaining = 0;
     loop {
         let read_result = sniffer_device.handle.read_bulk(
             sniffer_device.in_address,
@@ -146,17 +146,15 @@ fn main() {
                     println!("weird, no bytes read");
                 }
 
-                if buffer[1] > buffer[0] {
-                    // there is more to read
-                    continue_reading  = true;
+                if remaining = 0 {
+                    // Ready for next packet
+                    remaining = buffer[1];
                 }
 
-                dump(buffer.as_slice(), buffer[0] + 1); // extra byte
-                if !continue_reading {
-                    println!()
-                }
+                dump(buffer.as_slice(), buffer[0]);
+                remaining -= buffer[0];
 
-                if buffer[2] != CmdGotPkt as u8 && !continue_reading {
+                if buffer[2] != CmdGotPkt as u8 && remaining == 0 {
                     println!("Unexpected result {:#04x}", buffer[2]);
                     return;
                 }
