@@ -145,13 +145,17 @@ fn main() {
                 if n == 0 {
                     println!("weird, no bytes read");
                 }
+
                 if buffer[1] > buffer[0] {
                     // there is more to read
                     continue_reading  = true;
-                } else {
+                }
+
+                dump(buffer.as_slice(), buffer[0] + 1); // extra byte
+                if !continue_reading {
                     println!()
                 }
-                dump(buffer.as_slice(), buffer[0] + 1); // extra byte
+
                 if buffer[2] != CmdGotPkt as u8 && !continue_reading {
                     println!("Unexpected result {:#04x}", buffer[2]);
                     return;
