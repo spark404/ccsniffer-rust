@@ -146,7 +146,7 @@ fn main() {
                     println!("weird, no bytes read");
                 }
 
-                if remaining = 0 {
+                if remaining == 0 {
                     // Ready for next packet
                     remaining = buffer[1];
                 }
