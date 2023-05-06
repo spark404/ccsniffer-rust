@@ -152,7 +152,7 @@ fn main() {
                 }
 
                 if remaining < buffer[0] {
-                    println!("possible data loss, reset counter")
+                    println!("possible data loss, reset counter");
                     remaining = buffer[1];
                 }
 
