@@ -177,8 +177,8 @@ fn main() {
                 let packet = EnhancedPacketBlock {
                     interface_id: 0,
                     timestamp: Duration::from_secs(0),
-                    original_len: buffer[0] as u32,
-                    data: Cow::Borrowed(&buffer[0..buffer[0] as usize]),
+                    original_len: (buffer[0] - 4) as u32,
+                    data: Cow::Borrowed(&buffer[4..buffer[0] as usize]),
                     options: vec![],
                 };
 
