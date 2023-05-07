@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+use std::fs::File;
 use crate::CmdCodes::{CmdGotPkt, CmdInit, CmdSetChannel, CmdSniffOn};
 use crc::{Crc, CRC_16_XMODEM};
 use rusb::{DeviceDescriptor, DeviceHandle, DeviceList, GlobalContext};
@@ -5,6 +7,10 @@ use rusb::Direction::{In, Out};
 use std::process::exit;
 use std::time::Duration;
 use hxdmp::hexdump;
+use pcap_file::DataLink;
+use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
+use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
+use pcap_file::pcapng::{PcapNgBlock, PcapNgWriter};
 
 pub const CRC_16: Crc<u16> = Crc::<u16>::new(&CRC_16_XMODEM);
 
@@ -56,6 +62,9 @@ struct SnifferDevice {
 
 fn main() {
     println!("CCSniffer");
+
+    let file = File::create("out.pcap").expect("Error creating file");
+    let mut pcap_ng_writer = PcapNgWriter::new(file).unwrap();
 
     let devices = DeviceList::new().unwrap().iter().find_map(|d| {
         let device_desc = d
@@ -158,6 +167,23 @@ fn main() {
 
                 dump(buffer.as_slice(), buffer[0]);
                 remaining -= buffer[0];
+
+                let idb = InterfaceDescriptionBlock {
+                    linktype: DataLink::IEEE802_15_4,
+                    snaplen: 0xFFFF,
+                    options: vec![],
+                };
+
+                let packet = EnhancedPacketBlock {
+                    interface_id: 0,
+                    timestamp: Duration::from_secs(0),
+                    original_len: buffer[0] as u32,
+                    data: Cow::Borrowed(&buffer),
+                    options: vec![],
+                };
+
+                pcap_ng_writer.write_block(&idb.into_block()).unwrap();
+                pcap_ng_writer.write_block(&packet.into_block()).unwrap();
 
                 if buffer[2] != CmdGotPkt as u8 && remaining == 0 {
                     println!("Unexpected result {:#04x}", buffer[2]);
