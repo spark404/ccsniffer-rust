@@ -169,7 +169,7 @@ fn main() {
                 remaining -= buffer[0];
 
                 let idb = InterfaceDescriptionBlock {
-                    linktype: DataLink::IEEE802_15_4,
+                    linktype: DataLink::IEEE802_15_4_NOFCS,
                     snaplen: 0xFFFF,
                     options: vec![],
                 };
@@ -178,7 +178,7 @@ fn main() {
                     interface_id: 0,
                     timestamp: Duration::from_secs(0),
                     original_len: buffer[0] as u32,
-                    data: Cow::Borrowed(&buffer),
+                    data: Cow::Borrowed(&buffer[0..buffer[0] as usize]),
                     options: vec![],
                 };
 
