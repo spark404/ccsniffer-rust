@@ -169,7 +169,7 @@ fn main() {
                 remaining -= buffer[0];
 
                 let idb = InterfaceDescriptionBlock {
-                    linktype: DataLink::IEEE802_15_4_NOFCS,
+                    linktype: DataLink::IEEE802_15_4,
                     snaplen: 0xFFFF,
                     options: vec![],
                 };
