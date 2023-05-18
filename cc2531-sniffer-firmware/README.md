@@ -12,7 +12,7 @@ objcopy --gap-fill 0xFF --pad-to 0x040000 \
     -O binary cc2531-bumblebee-latest.bin
 ```
 
-The binary firmware can be uploaded with a programmer supporting the cc2531 chip. For example [ccloader|http://github.com/spark404/ccloader-rust].
+The binary firmware can be uploaded with a programmer supporting the cc2531 chip. For example [ccloader-rust](http://github.com/spark404/ccloader-rust).
 
 Checksums
 ---
