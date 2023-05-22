@@ -49,28 +49,24 @@ pub struct SnifferDevice {
     debug: bool
 }
 
-#[derive(Debug, Clone)]
-struct SnifferDeviceError;
+#[derive(Debug)]
+enum SnifferError {
+    DeviceError,
+    ProtocolError(&'static str)
+}
 
-impl fmt::Display for SnifferDeviceError {
+impl fmt::Display for SnifferError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "module error in the sniffer module")
+        match &*self {
+            SnifferError::DeviceError =>
+                write!(f, "module error in the sniffer module"),
+            SnifferError::ProtocolError(detail) =>
+                write!(f, "protocol error: {}", detail)
+        }
     }
 }
 
-impl error::Error for SnifferDeviceError {}
-
-#[derive(Debug, Clone)]
-struct ProtocolError;
-
-impl fmt::Display for ProtocolError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "protocol error")
-    }
-}
-
-impl error::Error for ProtocolError {}
-
+impl error::Error for SnifferError {}
 
 impl SnifferDevice {
     pub fn new(device: Device<GlobalContext>) -> Result<SnifferDevice, Box<dyn error::Error>> {
@@ -194,7 +190,7 @@ impl SnifferDevice {
                 // [4] = ?
 
                 if buffer[0] != buffer[1] {
-                    return Err(Box::new(ProtocolError));
+                    return Err(Box::new(SnifferError::ProtocolError("size mismatch")));
                 }
 
                 if self.debug {
@@ -203,14 +199,14 @@ impl SnifferDevice {
 
                 if buffer[2] != CmdCodes::CmdGotPkt as u8{
                     println!("Unexpected result {:#04x}", buffer[2]);
-                    return Err(Box::new(ProtocolError));
+                    return Err(Box::new(SnifferError::ProtocolError("Unexpected command code")));
                 }
 
                 // Drop the metadata
                 buffer.drain(..5);
                 Ok(buffer)
             },
-            Err(_) => Err(Box::new(ProtocolError))
+            Err(e) => Err(e.into())
         }
     }
 }
