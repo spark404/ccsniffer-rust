@@ -3,6 +3,7 @@ use rusb::Direction::{In, Out};
 use rusb::{Device, DeviceDescriptor, DeviceHandle, DeviceList, GlobalContext};
 use std::time::Duration;
 use std::{error, fmt};
+use crate::sniffer::SnifferError::DeviceError;
 
 #[repr(u8)]
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
@@ -52,7 +53,8 @@ pub struct SnifferDevice {
 #[derive(Debug)]
 enum SnifferError {
     DeviceError,
-    ProtocolError(&'static str)
+    ProtocolError(&'static str),
+    TimeOut,
 }
 
 impl fmt::Display for SnifferError {
@@ -61,7 +63,9 @@ impl fmt::Display for SnifferError {
             SnifferError::DeviceError =>
                 write!(f, "module error in the sniffer module"),
             SnifferError::ProtocolError(detail) =>
-                write!(f, "protocol error: {}", detail)
+                write!(f, "protocol error: {}", detail),
+            SnifferError::TimeOut =>
+                write!(f, "time out")
         }
     }
 }
@@ -76,8 +80,7 @@ impl SnifferDevice {
         device_handle.claim_interface(0)?;
 
         let config_desc = device
-            .active_config_descriptor()
-            .expect("Failed to get configuration descriptor or no active config");
+            .active_config_descriptor()?;
 
         // Should have one interface
         let interface = config_desc.interfaces().next().unwrap();
@@ -88,14 +91,14 @@ impl SnifferDevice {
             .find(|endpoint| {
                 return endpoint.direction() == In;
             })
-            .unwrap();
+            .ok_or_else(|| Box::new(DeviceError))?;
 
         let out_endpoint = interface_descriptor
             .endpoint_descriptors()
             .find(|endpoint| {
                 return endpoint.direction() == Out;
             })
-            .unwrap();
+            .ok_or_else(|| Box::new(DeviceError))?;
 
         return Ok(SnifferDevice {
             handle: device_handle,
@@ -206,7 +209,10 @@ impl SnifferDevice {
                 buffer.drain(..5);
                 Ok(buffer)
             },
-            Err(e) => Err(e.into())
+            Err(e) => match e {
+                rusb::Error::Timeout => Err(Box::new(SnifferError::TimeOut)),
+                _ => Err(e.into())
+            }
         }
     }
 }
