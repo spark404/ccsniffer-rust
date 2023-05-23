@@ -85,6 +85,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     println!("Connected to {}", sniffer.get_product_name().unwrap());
+    if cli.debug {
+        let mut sniffer = sniffer;
+        sniffer.set_debug(true);
+    }
 
     println!("Send CmdInit");
     sniffer.send_command(sniffer::CmdCodes::CmdInit, &[]);
