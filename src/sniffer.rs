@@ -211,7 +211,7 @@ impl SnifferDevice {
                 }
 
                 buffer.drain((n-1)..); // Drop the unused part
-                buffer.drain(..5); // Drop the metadata
+                buffer.drain(..3); // Drop the metadata
                 Ok(buffer)
             },
             Err(e) => match e {

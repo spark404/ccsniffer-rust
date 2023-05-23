@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::{error::Error, thread, time::Duration};
+use std::{error::Error, thread};
 use std::time::SystemTime;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionOption::IfTsResol;
 
@@ -106,6 +106,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match sniffer.receive_packet() {
             Ok(n) => {
+                // First two bytes are RSSI and link quality
                 let duration_since_epoch = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
                     Ok(dt) => dt,
                     Err(_) => panic!("SystemTime before UNIX EPOCH!"),
@@ -124,10 +125,25 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut epd_data: Vec<u8> = vec![];
                 epd_data.push(0);
                 epd_data.push(0);
+                epd_data.push(4 + 8);
+                epd_data.push(0);
+
+                let mut packet_data = n.to_vec();
+
+                // TAP RSSI TLV
+                epd_data.push(1);
+                epd_data.push(0);
+                epd_data.push(4);
+                epd_data.push(0);
+                epd_data.push(packet_data.drain(..1).as_slice()[0]);
+                epd_data.push(0);
+                epd_data.push(0);
                 epd_data.push(0);
                 epd_data.push(0);
 
-                epd_data.append(&mut n.to_vec());
+                packet_data.drain(..1);
+
+                epd_data.append(&mut packet_data);
 
                 let packet = EnhancedPacketBlock {
                     interface_id: 0,
