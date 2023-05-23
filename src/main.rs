@@ -105,7 +105,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match sniffer.receive_packet() {
             Ok(n) => {
-                let seconds_since_epoch = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                let duration_since_epoch = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
                     Ok(dt) => dt,
                     Err(_) => panic!("SystemTime before UNIX EPOCH!"),
                 };
@@ -122,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let packet = EnhancedPacketBlock {
                     interface_id: 0,
-                    timestamp: seconds_since_epoch,
+                    timestamp: duration_since_epoch,
                     original_len: n.len() as u32,
                     data: Cow::from(n.as_slice()),
                     options: vec![],
