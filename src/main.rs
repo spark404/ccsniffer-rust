@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{error::Error, thread, time::Duration};
 use std::time::SystemTime;
+use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionOption::IfTsResol;
 
 mod sniffer;
 
@@ -113,12 +114,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let idb = InterfaceDescriptionBlock {
                     linktype: DataLink::IEEE802_15_4_NOFCS,
                     snaplen: 0,
-                    options: vec![],
+                    options: vec![
+                        IfTsResol(9)  // pcap-file library uses nanoseconds for timestamps
+                    ],
                 };
 
                 // For TAP add the following
                 // TAP header 32 bits
-                // let epd_data = vec![];
+                // let mut epd_data: Vec<u8> = vec![];
+                // epd_data.push(0);
+                // epd_data.push(0);
+                // epd_data.push(0);
+                // epd_data.push(0);
 
                 let packet = EnhancedPacketBlock {
                     interface_id: 0,

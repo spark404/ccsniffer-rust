@@ -210,8 +210,8 @@ impl SnifferDevice {
                     return Err(Box::new(SnifferError::ProtocolError("Unexpected command code")));
                 }
 
+                buffer.drain((n-1)..); // Drop the unused part
                 buffer.drain(..5); // Drop the metadata
-                buffer.drain(n..); // Drop the unused part
                 Ok(buffer)
             },
             Err(e) => match e {
