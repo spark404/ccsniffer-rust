@@ -123,7 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let mut epd_data: Vec<u8> = vec![];
                 epd_data.push(0);
                 epd_data.push(0);
-                epd_data.push(4 + 8);
+                epd_data.push(4 + 8 + 8); // Header and two TLV
                 epd_data.push(0);
 
                 // First two bytes are RSSI (dbm) and link quality index
