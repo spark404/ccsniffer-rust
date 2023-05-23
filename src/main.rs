@@ -106,7 +106,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match sniffer.receive_packet() {
             Ok(n) => {
-                // First two bytes are RSSI and link quality
                 let duration_since_epoch = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
                     Ok(dt) => dt,
                     Err(_) => panic!("SystemTime before UNIX EPOCH!"),
@@ -120,7 +119,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ],
                 };
 
-                // For TAP add the following
                 // TAP header 32 bits
                 let mut epd_data: Vec<u8> = vec![];
                 epd_data.push(0);
@@ -128,6 +126,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 epd_data.push(4 + 8);
                 epd_data.push(0);
 
+                // First two bytes are RSSI (dbm) and link quality index
                 let mut packet_data = n.to_vec();
 
                 // TAP RSSI TLV
@@ -135,13 +134,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                 epd_data.push(0);
                 epd_data.push(4);
                 epd_data.push(0);
+                let rssi: f32 = packet_data.drain(..1).as_slice()[0] as f32;
+                epd_data.append(&mut rssi.to_le_bytes().to_vec());
+
+                // TAP LQI TLV
+                epd_data.push(10);
+                epd_data.push(0);
+                epd_data.push(1);
+                epd_data.push(0);
                 epd_data.push(packet_data.drain(..1).as_slice()[0]);
                 epd_data.push(0);
                 epd_data.push(0);
                 epd_data.push(0);
-                epd_data.push(0);
-
-                packet_data.drain(..1);
 
                 epd_data.append(&mut packet_data);
 
