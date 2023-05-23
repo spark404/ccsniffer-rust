@@ -109,10 +109,6 @@ impl SnifferDevice {
         });
     }
 
-    pub fn set_debug(&mut self, debug: bool) {
-        self.debug = debug;
-    }
-
     pub fn find_device(vendor: u16, product: u16) -> Option<Device<GlobalContext>> {
         DeviceList::new().unwrap().iter().find_map(|d| {
             let device_desc = d.device_descriptor().expect(&*format!(
@@ -152,10 +148,7 @@ impl SnifferDevice {
             &buffer[0..buffer[0] as usize],
             Duration::from_millis(250),
         );
-
-        if self.debug {
-            dump(&buffer, buffer[0]);
-        }
+        dump(&buffer, buffer[0]);
 
         let read_result = self.handle.read_bulk(
             self.in_address,
@@ -167,11 +160,7 @@ impl SnifferDevice {
                 if n == 0 {
                     println!("weird, no bytes read");
                 }
-
-                if self.debug {
-                    dump(buffer.as_slice(), buffer[0] + 1); // Byte extra for total length
-                }
-
+                dump(buffer.as_slice(), buffer[0] + 1); // Byte extra for total length
                 if buffer[2] != ack as u8 {
                     println!("Unexpected result {:#04x}", buffer[2]);
                     return;
