@@ -12,6 +12,7 @@ use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{error::Error, thread, time::Duration};
+use std::time::SystemTime;
 
 mod sniffer;
 
@@ -104,15 +105,24 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match sniffer.receive_packet() {
             Ok(n) => {
+                let seconds_since_epoch = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                    Ok(dt) => dt,
+                    Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+                };
+
                 let idb = InterfaceDescriptionBlock {
                     linktype: DataLink::IEEE802_15_4_NOFCS,
-                    snaplen: 0xFFFF,
+                    snaplen: 0,
                     options: vec![],
                 };
 
+                // For TAP add the following
+                // TAP header 32 bits
+                // let epd_data = vec![];
+
                 let packet = EnhancedPacketBlock {
                     interface_id: 0,
-                    timestamp: Duration::from_secs(0),
+                    timestamp: seconds_since_epoch,
                     original_len: n.len() as u32,
                     data: Cow::from(n.as_slice()),
                     options: vec![],

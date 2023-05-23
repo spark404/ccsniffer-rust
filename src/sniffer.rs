@@ -183,16 +183,21 @@ impl SnifferDevice {
 
         match read_result {
             Ok(n) => {
-                if n == 0 {
+                // We should have received data in the following format
+                // [0] = USB data size
+                // [1] = Protocol packet length
+                // [2] = Command code
+                // [3] = RSSI
+                // [4] = Link Quality
+                // [..] = Raw packet
+                // [len-1] = Checksum - last byte is a checksum
 
+                if n == 0 {
+                    return Err(Box::new(SnifferError::ProtocolError("empty read")))
                 }
-                // [0] = message len
-                // [1] = packet len
-                // [2] = command code
-                // [3] = ?
-                // [4] = ?
 
                 if buffer[0] != buffer[1] {
+                    // Shouldn't happen with my version of the firmware
                     return Err(Box::new(SnifferError::ProtocolError("size mismatch")));
                 }
 
