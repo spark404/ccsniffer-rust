@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 };
 
                 let idb = InterfaceDescriptionBlock {
-                    linktype: DataLink::IEEE802_15_4_NOFCS,
+                    linktype: DataLink::IEEE802_15_4_TAP,
                     snaplen: 0,
                     options: vec![
                         IfTsResol(9)  // pcap-file library uses nanoseconds for timestamps
@@ -121,17 +121,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 // For TAP add the following
                 // TAP header 32 bits
-                // let mut epd_data: Vec<u8> = vec![];
-                // epd_data.push(0);
-                // epd_data.push(0);
-                // epd_data.push(0);
-                // epd_data.push(0);
+                let mut epd_data: Vec<u8> = vec![];
+                epd_data.push(0);
+                epd_data.push(0);
+                epd_data.push(0);
+                epd_data.push(0);
+
+                epd_data.append(&mut n.to_vec());
 
                 let packet = EnhancedPacketBlock {
                     interface_id: 0,
                     timestamp: duration_since_epoch,
-                    original_len: n.len() as u32,
-                    data: Cow::from(n.as_slice()),
+                    original_len: epd_data.len() as u32,
+                    data: Cow::from(epd_data.as_slice()),
                     options: vec![],
                 };
 
