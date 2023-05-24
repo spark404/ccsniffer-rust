@@ -51,7 +51,7 @@ pub struct SnifferDevice {
 }
 
 #[derive(Debug)]
-enum SnifferError {
+pub enum SnifferError {
     DeviceError,
     ProtocolError(&'static str),
     TimeOut,
@@ -82,8 +82,8 @@ impl SnifferDevice {
         let config_desc = device.active_config_descriptor()?;
 
         // Should have one interface
-        let interface = config_desc.interfaces().next()?;
-        let interface_descriptor = interface.descriptors().next()?;
+        let interface = config_desc.interfaces().next().unwrap();
+        let interface_descriptor = interface.descriptors().next().unwrap();
         let in_endpoint = find_first_endpoint(&interface_descriptor, In)?;
         let out_endpoint = find_first_endpoint(&interface_descriptor, Out)?;
 
