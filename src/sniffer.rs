@@ -55,6 +55,7 @@ pub enum SnifferError {
     DeviceError,
     ProtocolError(&'static str),
     TimeOut,
+    UsbError(rusb::Error)
 }
 
 impl fmt::Display for SnifferError {
@@ -65,7 +66,10 @@ impl fmt::Display for SnifferError {
             SnifferError::ProtocolError(detail) =>
                 write!(f, "protocol error: {}", detail),
             SnifferError::TimeOut =>
-                write!(f, "time out")
+                write!(f, "time out"),
+            SnifferError::UsbError(e) => {
+                write!(f, "usb error: {}", e.to_string())
+            }
         }
     }
 }
@@ -138,7 +142,7 @@ impl SnifferDevice {
             self.out_address,
             &buffer[0..buffer[0] as usize],
             Duration::from_millis(250),
-        ).or_else(|_| {return Err(SnifferError::DeviceError)})?;
+        ).or_else(|e| {return Err(SnifferError::UsbError(e))})?;
 
         if bytes_written != buffer.len() {
             return Err(SnifferError::DeviceError);
@@ -164,8 +168,8 @@ impl SnifferDevice {
 
                 Ok(())
             }
-            Err(_) => {
-                Err(SnifferError::DeviceError)
+            Err(e) => {
+                Err(SnifferError::UsbError(e))
             }
         }
     }
