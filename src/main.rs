@@ -1,4 +1,4 @@
-use crate::sniffer::{CmdCodes, SnifferDevice};
+use crate::sniffer::{CmdCodes, SnifferDevice, SnifferError};
 use clap::Parser;
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
 use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
@@ -92,6 +92,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Connected to {}", sniffer.get_product_name().unwrap());
 
+    // After repeated used there might be packets in the queue
+    // Drain by reading and ignoring errors
+    _ = sniffer.receive_packet();
+
     println!("Send CmdInit");
     sniffer.send_command(sniffer::CmdCodes::CmdInit, &[])?;
 
@@ -168,7 +172,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 received_packets += 1;
             },
             Err(e) => {
-                println!("read failed: {e}");
+                match e {
+                    SnifferError::UsbError(rusb::Error::Timeout) => {}
+                    _ => {
+                        println!("read failed with error: {e}");
+                        break
+                    }
+                }
+
             }
         };
     }

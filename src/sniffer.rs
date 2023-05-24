@@ -74,6 +74,12 @@ impl fmt::Display for SnifferError {
     }
 }
 
+impl From<rusb::Error> for SnifferError {
+    fn from(e: rusb::Error) -> Self {
+        return SnifferError::UsbError(e)
+    }
+}
+
 impl error::Error for SnifferError {}
 
 impl SnifferDevice {
@@ -175,7 +181,7 @@ impl SnifferDevice {
         }
     }
 
-    pub fn receive_packet(&self) -> Result<Vec<u8>, Box<dyn error::Error>> {
+    pub fn receive_packet(&self) -> Result<Vec<u8>, SnifferError> {
         let mut buffer = vec![0; 256];
 
         let read_result = self.handle.read_bulk(self.in_address,
@@ -195,12 +201,12 @@ impl SnifferDevice {
                 // [len-1] = Checksum - last byte is a checksum
 
                 if n == 0 {
-                    return Err(Box::new(SnifferError::ProtocolError("empty read")))
+                    return Err(SnifferError::ProtocolError("empty read"))
                 }
 
                 if buffer[0] != buffer[1] {
                     // Shouldn't happen with my version of the firmware
-                    return Err(Box::new(SnifferError::ProtocolError("size mismatch")));
+                    return Err(SnifferError::ProtocolError("size mismatch"));
                 }
 
                 if self.debug {
@@ -209,7 +215,7 @@ impl SnifferDevice {
 
                 if buffer[2] != CmdCodes::CmdGotPkt as u8{
                     println!("Unexpected result {:#04x}", buffer[2]);
-                    return Err(Box::new(SnifferError::ProtocolError("Unexpected command code")));
+                    return Err(SnifferError::ProtocolError("Unexpected command code"));
                 }
 
                 buffer.drain((n-1)..); // Drop the unused part
@@ -217,7 +223,7 @@ impl SnifferDevice {
                 Ok(buffer)
             },
             Err(e) => match e {
-                rusb::Error::Timeout => Err(Box::new(SnifferError::TimeOut)),
+                rusb::Error::Timeout => Err(SnifferError::TimeOut),
                 _ => Err(e.into())
             }
         }
