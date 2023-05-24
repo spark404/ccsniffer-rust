@@ -144,8 +144,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 epd_data.push(0);
                 epd_data.push(4);
                 epd_data.push(0);
-                let rssi: f32 = packet_data.drain(..1).as_slice()[0] as f32;
-                epd_data.append(&mut rssi.to_le_bytes().to_vec());
+                let raw_rssi = packet_data.drain(..1).as_slice()[0];
+                let rssi = i8::from_le_bytes([raw_rssi]);
+                let rssi_value: f32 = rssi as f32;
+                epd_data.append(&mut rssi_value.to_le_bytes().to_vec());
 
                 // TAP LQI TLV
                 epd_data.push(10);
