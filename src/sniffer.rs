@@ -128,10 +128,10 @@ impl SnifferDevice {
         buffer.push((3 + payload_len) as u8); // length
         buffer.push(command as u8); // command
         buffer.append(&mut payload.to_vec());
-        buffer.push(calculate_crc(buffer.as_slice(), buffer[0])); //checksum
+        buffer.push(calculate_crc(buffer.as_slice(), payload_len + 2)); //checksum
 
         if self.debug {
-            dump(&buffer, buffer[0]);
+            dump(&buffer, buffer.len());
         }
 
         let bytes_written = self.handle.write_bulk(
@@ -155,7 +155,7 @@ impl SnifferDevice {
                 }
 
                 if self.debug {
-                    dump(buffer.as_slice(), buffer[0] + 1); // Byte extra for total length
+                    dump(buffer.as_slice(), (buffer[0] + 1) as usize); // Byte extra for total length
                 }
 
                 if buffer[2] != ack as u8 {
@@ -199,7 +199,7 @@ impl SnifferDevice {
                 }
 
                 if self.debug {
-                    dump(buffer.as_slice(), buffer[0]);
+                    dump(buffer.as_slice(), buffer[0] as usize);
                 }
 
                 if buffer[2] != CmdCodes::CmdGotPkt as u8{
@@ -220,7 +220,7 @@ impl SnifferDevice {
 }
 
 // Procedure copied from the firmware
-fn calculate_crc(buffer: &[u8], len: u8) -> u8 {
+fn calculate_crc(buffer: &[u8], len: usize) -> u8 {
     let mut checksum = 0xff;
     for i in 0..len {
         checksum ^= buffer[i as usize];
@@ -228,7 +228,7 @@ fn calculate_crc(buffer: &[u8], len: u8) -> u8 {
     return checksum;
 }
 
-fn dump(buffer: &[u8], len: u8) {
+fn dump(buffer: &[u8], len: usize) {
     let mut outbuf = Vec::new();
     hexdump(&buffer[0..len as usize], &mut outbuf).expect("hexdump issue");
     println!("{}", String::from_utf8_lossy(&outbuf))
