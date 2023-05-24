@@ -135,7 +135,7 @@ impl SnifferDevice {
         buffer.push(calculate_crc(buffer.as_slice(), payload_len + 2)); //checksum
 
         if self.debug {
-            dump(&buffer, buffer.len());
+            dump(buffer.as_slice(), buffer.len());
         }
 
         let bytes_written = self.handle.write_bulk(
@@ -148,9 +148,10 @@ impl SnifferDevice {
             return Err(SnifferError::DeviceError);
         }
 
+        let mut read_buffer = vec![0; 256];
         match self.handle.read_bulk(
             self.in_address,
-            buffer.as_mut_slice(),
+            read_buffer.as_mut_slice(),
             Duration::from_millis(250),
         ) {
             Ok(n) => {
@@ -159,10 +160,10 @@ impl SnifferDevice {
                 }
 
                 if self.debug {
-                    dump(buffer.as_slice(), (buffer[0] + 1) as usize); // Byte extra for total length
+                    dump(read_buffer.as_slice(), (read_buffer[0] + 1) as usize); // Byte extra for total length
                 }
 
-                if buffer[2] != ack as u8 {
+                if read_buffer[2] != ack as u8 {
                     return Err(SnifferError::ProtocolError("unexpected response code"));
                 }
 
