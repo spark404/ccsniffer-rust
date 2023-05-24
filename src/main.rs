@@ -173,7 +173,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
             Err(e) => {
                 match e {
-                    SnifferError::UsbError(rusb::Error::Timeout) => {}
+                    SnifferError::TimeOut => {}
                     _ => {
                         println!("read failed with error: {e}");
                         break
