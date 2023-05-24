@@ -76,13 +76,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let sniffer = match SnifferDevice::new(device) {
+    let mut sniffer = match SnifferDevice::new(device) {
         Ok(n) => n,
         Err(e) => {
             println!("Failed to open sniffer device for communication: {}", e);
             exit(1);
         }
     };
+
+    if cli.debug {
+        sniffer.set_debug();
+    }
+
+    let sniffer = sniffer;
 
     println!("Connected to {}", sniffer.get_product_name().unwrap());
 

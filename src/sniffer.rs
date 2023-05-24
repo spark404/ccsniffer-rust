@@ -221,6 +221,10 @@ impl SnifferDevice {
             }
         }
     }
+
+    pub fn set_debug(&mut self) {
+        self.debug = true;
+    }
 }
 
 // Procedure copied from the firmware
