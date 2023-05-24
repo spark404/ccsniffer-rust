@@ -1,9 +1,9 @@
 use hxdmp::hexdump;
 use rusb::Direction::{In, Out};
-use rusb::{Device, DeviceDescriptor, DeviceHandle, DeviceList, GlobalContext};
+use rusb::{Device, DeviceDescriptor, DeviceHandle, DeviceList, Direction, EndpointDescriptor, GlobalContext, InterfaceDescriptor};
 use std::time::Duration;
 use std::{error, fmt};
-use crate::sniffer::SnifferError::DeviceError;
+use std::fmt::Debug;
 
 #[repr(u8)]
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
@@ -79,26 +79,13 @@ impl SnifferDevice {
 
         device_handle.claim_interface(0)?;
 
-        let config_desc = device
-            .active_config_descriptor()?;
+        let config_desc = device.active_config_descriptor()?;
 
         // Should have one interface
-        let interface = config_desc.interfaces().next().unwrap();
-        let interface_descriptor = interface.descriptors().next().unwrap();
-
-        let in_endpoint = interface_descriptor
-            .endpoint_descriptors()
-            .find(|endpoint| {
-                return endpoint.direction() == In;
-            })
-            .ok_or_else(|| Box::new(DeviceError))?;
-
-        let out_endpoint = interface_descriptor
-            .endpoint_descriptors()
-            .find(|endpoint| {
-                return endpoint.direction() == Out;
-            })
-            .ok_or_else(|| Box::new(DeviceError))?;
+        let interface = config_desc.interfaces().next()?;
+        let interface_descriptor = interface.descriptors().next()?;
+        let in_endpoint = find_first_endpoint(&interface_descriptor, In)?;
+        let out_endpoint = find_first_endpoint(&interface_descriptor, Out)?;
 
         return Ok(SnifferDevice {
             handle: device_handle,
@@ -235,4 +222,13 @@ fn dump(buffer: &[u8], len: u8) {
     let mut outbuf = Vec::new();
     hexdump(&buffer[0..len as usize], &mut outbuf).expect("hexdump issue");
     println!("{}", String::from_utf8_lossy(&outbuf))
+}
+
+fn find_first_endpoint<'a>(interface_descriptor: &'a InterfaceDescriptor<'a>, direction: Direction) -> Result<EndpointDescriptor, Box<SnifferError>> {
+    return interface_descriptor
+        .endpoint_descriptors()
+        .find(|endpoint| {
+            return endpoint.direction() == direction;
+        })
+        .ok_or_else(|| Box::new(SnifferError::DeviceError))
 }
