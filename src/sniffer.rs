@@ -119,43 +119,53 @@ impl SnifferDevice {
         }
     }
 
-    pub fn send_command(&self, command: CmdCodes, payload: &[u8]) {
-        let mut buffer = vec![0; 256];
+    pub fn send_command(&self, command: CmdCodes, payload: &[u8]) -> Result<(), SnifferError>{
+        let mut buffer = vec![];
 
         let payload_len = payload.len();
         let ack: CmdCodes = (command as u8 + 1).into(); // hack, ack is command + 1 in the enum
 
-        buffer[0] = (3 + payload_len) as u8; // length
-        buffer[1] = command as u8; // command
-        buffer[2..payload_len + 2].copy_from_slice(payload);
-        buffer[payload_len + 2] = calculate_crc(buffer.as_slice(), buffer[0]); //checksum
+        buffer.push((3 + payload_len) as u8); // length
+        buffer.push(command as u8); // command
+        buffer.append(&mut payload.to_vec());
+        buffer.push(calculate_crc(buffer.as_slice(), buffer[0])); //checksum
 
-        let _write_result = self.handle.write_bulk(
+        if self.debug {
+            dump(&buffer, buffer[0]);
+        }
+
+        let bytes_written = self.handle.write_bulk(
             self.out_address,
             &buffer[0..buffer[0] as usize],
             Duration::from_millis(250),
-        );
-        dump(&buffer, buffer[0]);
+        ).or_else(|_| {return Err(SnifferError::DeviceError)})?;
 
-        let read_result = self.handle.read_bulk(
+        if bytes_written != buffer.len() {
+            return Err(SnifferError::DeviceError);
+        }
+
+        match self.handle.read_bulk(
             self.in_address,
             buffer.as_mut_slice(),
             Duration::from_millis(250),
-        );
-        match read_result {
+        ) {
             Ok(n) => {
                 if n == 0 {
-                    println!("weird, no bytes read");
+                    return Err(SnifferError::DeviceError);
                 }
-                dump(buffer.as_slice(), buffer[0] + 1); // Byte extra for total length
+
+                if self.debug {
+                    dump(buffer.as_slice(), buffer[0] + 1); // Byte extra for total length
+                }
+
                 if buffer[2] != ack as u8 {
-                    println!("Unexpected result {:#04x}", buffer[2]);
-                    return;
+                    return Err(SnifferError::ProtocolError("unexpected response code"));
                 }
-                println!("Acknowledged")
+
+                Ok(())
             }
-            Err(e) => {
-                println!("read failed: {e}");
+            Err(_) => {
+                Err(SnifferError::DeviceError)
             }
         }
     }

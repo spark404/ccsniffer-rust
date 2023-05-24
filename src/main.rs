@@ -87,13 +87,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Connected to {}", sniffer.get_product_name().unwrap());
 
     println!("Send CmdInit");
-    sniffer.send_command(sniffer::CmdCodes::CmdInit, &[]);
+    sniffer.send_command(sniffer::CmdCodes::CmdInit, &[])?;
 
     println!("Send CmdSetChannel {}", cli.channel);
-    sniffer.send_command(CmdCodes::CmdSetChannel, vec![cli.channel].as_slice());
+    sniffer.send_command(CmdCodes::CmdSetChannel, vec![cli.channel].as_slice())?;
 
     println!("Send CmdSniffOn");
-    sniffer.send_command(CmdCodes::CmdSniffOn, &[]);
+    sniffer.send_command(CmdCodes::CmdSniffOn, &[])?;
 
     println!("Looping over received packets");
     let mut received_packets = 0;
@@ -167,9 +167,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
     }
 
-
     println!("Send CmdSniffOff");
-    sniffer.send_command(CmdCodes::CmdSniffOff, &[]);
+    sniffer.send_command(CmdCodes::CmdSniffOff, &[])?;
 
     println!("Captured {} packets", received_packets);
     return Ok(());
