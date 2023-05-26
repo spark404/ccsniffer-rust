@@ -1,7 +1,8 @@
+use crate::pcaptap::TapBlock;
 use crate::sniffer::{CmdCodes, SnifferDevice, SnifferError};
 use clap::Parser;
 use pcap_file::pcapng::blocks::enhanced_packet::EnhancedPacketBlock;
-use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionBlock;
+use pcap_file::pcapng::blocks::interface_description::{InterfaceDescriptionBlock, InterfaceDescriptionOption};
 use pcap_file::pcapng::{PcapNgBlock, PcapNgWriter};
 use pcap_file::DataLink;
 use signal_hook::{consts::SIGINT, iterator::Signals};
@@ -11,10 +12,10 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::{error::Error, thread};
 use std::time::SystemTime;
-use pcap_file::pcapng::blocks::interface_description::InterfaceDescriptionOption::IfTsResol;
+use std::{error::Error, thread};
 
+mod pcaptap;
 mod sniffer;
 
 const VENDOR: u16 = 0x0451; // Texas Instruments
@@ -32,7 +33,6 @@ struct Cli {
     #[arg(short, long)]
     debug: bool,
 }
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
@@ -66,7 +66,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let file = File::create(cli.capture_file.unwrap()).expect("Error creating file");
-    let mut pcap_ng_writer = PcapNgWriter::new(file).unwrap();
 
     let device = match SnifferDevice::find_device(VENDOR, PRODUCT) {
         Some(n) => n,
@@ -87,6 +86,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     if cli.debug {
         sniffer.set_debug();
     }
+
+    let mut pcap_ng_writer = PcapNgWriter::new(file).unwrap();
+
+    let idb = InterfaceDescriptionBlock {
+        linktype: DataLink::IEEE802_15_4_TAP,
+        snaplen: 256,
+        options: vec![
+            InterfaceDescriptionOption::IfName(Cow::from("cc2531-usb")),
+            InterfaceDescriptionOption::IfDescription(Cow::from(sniffer.get_product_name().unwrap())),
+            InterfaceDescriptionOption::IfTsResol(9), // pcap-file library uses nanoseconds for timestamps
+        ],
+    };
+    pcap_ng_writer.write_block(&idb.into_block()).unwrap();
 
     let sniffer = sniffer;
 
@@ -116,48 +128,27 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match sniffer.receive_packet() {
             Ok(n) => {
-                let duration_since_epoch = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                    Ok(dt) => dt,
-                    Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-                };
+                let duration_since_epoch =
+                    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                        Ok(dt) => dt,
+                        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+                    };
 
-                let idb = InterfaceDescriptionBlock {
-                    linktype: DataLink::IEEE802_15_4_TAP,
-                    snaplen: 0,
-                    options: vec![
-                        IfTsResol(9)  // pcap-file library uses nanoseconds for timestamps
-                    ],
-                };
 
-                // TAP header 32 bits
-                let mut epd_data: Vec<u8> = vec![];
-                epd_data.push(0);
-                epd_data.push(0);
-                epd_data.push(4 + 8 + 8); // Header and two TLV
-                epd_data.push(0);
 
                 // First two bytes are RSSI (dbm) and link quality index
                 let mut packet_data = n.to_vec();
+                let metadata: Vec<u8> = packet_data.drain(..2).collect();
+                let rssi = i8::from_le_bytes([metadata[0]]) as f32;
+                let lqi = metadata[1];
 
-                // TAP RSSI TLV
-                epd_data.push(1);
-                epd_data.push(0);
-                epd_data.push(4);
-                epd_data.push(0);
-                let raw_rssi = packet_data.drain(..1).as_slice()[0];
-                let rssi = i8::from_le_bytes([raw_rssi]);
-                let rssi_value: f32 = rssi as f32;
-                epd_data.append(&mut rssi_value.to_le_bytes().to_vec());
+                let mut epd_data: Vec<u8> = vec![];
 
-                // TAP LQI TLV
-                epd_data.push(10);
-                epd_data.push(0);
-                epd_data.push(1);
-                epd_data.push(0);
-                epd_data.push(packet_data.drain(..1).as_slice()[0]);
-                epd_data.push(0);
-                epd_data.push(0);
-                epd_data.push(0);
+                // TAP
+                TapBlock::Header(3).write_to(&mut epd_data)?;
+                TapBlock::TlvRssi(rssi).write_to(&mut epd_data)?;
+                TapBlock::ChannelAssignment(cli.channel as u16).write_to(&mut epd_data)?;
+                TapBlock::TlvLqi(lqi).write_to(&mut epd_data)?;
 
                 epd_data.append(&mut packet_data);
 
@@ -169,20 +160,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                     options: vec![],
                 };
 
-                pcap_ng_writer.write_block(&idb.into_block()).unwrap();
                 pcap_ng_writer.write_block(&packet.into_block()).unwrap();
                 received_packets += 1;
-            },
-            Err(e) => {
-                match e {
-                    SnifferError::TimeOut => {}
-                    _ => {
-                        println!("read failed with error: {e}");
-                        break
-                    }
-                }
-
             }
+            Err(e) => match e {
+                SnifferError::TimeOut => {}
+                _ => {
+                    println!("read failed with error: {e}");
+                    break;
+                }
+            },
         };
     }
 

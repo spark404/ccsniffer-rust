@@ -1,9 +1,12 @@
 use hxdmp::hexdump;
 use rusb::Direction::{In, Out};
-use rusb::{Device, DeviceDescriptor, DeviceHandle, DeviceList, Direction, EndpointDescriptor, GlobalContext, InterfaceDescriptor};
+use rusb::{
+    Device, DeviceDescriptor, DeviceHandle, DeviceList, Direction, EndpointDescriptor,
+    GlobalContext, InterfaceDescriptor,
+};
+use std::fmt::Debug;
 use std::time::Duration;
 use std::{error, fmt};
-use std::fmt::Debug;
 
 #[repr(u8)]
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
@@ -44,10 +47,10 @@ impl From<u8> for CmdCodes {
 
 pub struct SnifferDevice {
     handle: DeviceHandle<GlobalContext>,
-    _descriptor: DeviceDescriptor,
+    descriptor: DeviceDescriptor,
     out_address: u8,
     in_address: u8,
-    debug: bool
+    debug: bool,
 }
 
 #[derive(Debug)]
@@ -55,18 +58,15 @@ pub enum SnifferError {
     DeviceError,
     ProtocolError(&'static str),
     TimeOut,
-    UsbError(rusb::Error)
+    UsbError(rusb::Error),
 }
 
 impl fmt::Display for SnifferError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &*self {
-            SnifferError::DeviceError =>
-                write!(f, "module error in the sniffer module"),
-            SnifferError::ProtocolError(detail) =>
-                write!(f, "protocol error: {}", detail),
-            SnifferError::TimeOut =>
-                write!(f, "time out"),
+            SnifferError::DeviceError => write!(f, "module error in the sniffer module"),
+            SnifferError::ProtocolError(detail) => write!(f, "protocol error: {}", detail),
+            SnifferError::TimeOut => write!(f, "time out"),
             SnifferError::UsbError(e) => {
                 write!(f, "usb error: {}", e.to_string())
             }
@@ -76,7 +76,7 @@ impl fmt::Display for SnifferError {
 
 impl From<rusb::Error> for SnifferError {
     fn from(e: rusb::Error) -> Self {
-        return SnifferError::UsbError(e)
+        return SnifferError::UsbError(e);
     }
 }
 
@@ -84,10 +84,10 @@ impl error::Error for SnifferError {}
 
 impl SnifferDevice {
     pub fn new(device: Device<GlobalContext>) -> Result<SnifferDevice, Box<dyn error::Error>> {
-        let mut device_handle = device.open()?;
+        let mut handle = device.open()?;
         let descriptor = device.device_descriptor()?;
 
-        device_handle.claim_interface(0)?;
+        handle.claim_interface(0)?;
 
         let config_desc = device.active_config_descriptor()?;
 
@@ -98,11 +98,11 @@ impl SnifferDevice {
         let out_endpoint = find_first_endpoint(&interface_descriptor, Out)?;
 
         return Ok(SnifferDevice {
-            handle: device_handle,
-            _descriptor: descriptor,
+            handle,
+            descriptor,
             out_address: out_endpoint.address(),
             in_address: in_endpoint.address(),
-            debug: false
+            debug: false,
         });
     }
 
@@ -123,13 +123,13 @@ impl SnifferDevice {
     }
 
     pub fn get_product_name(&self) -> Option<String> {
-        match self.handle.read_product_string_ascii(&self._descriptor) {
+        match self.handle.read_product_string_ascii(&self.descriptor) {
             Ok(n) => Some(n),
             Err(_e) => None,
         }
     }
 
-    pub fn send_command(&self, command: CmdCodes, payload: &[u8]) -> Result<(), SnifferError>{
+    pub fn send_command(&self, command: CmdCodes, payload: &[u8]) -> Result<(), SnifferError> {
         let mut buffer = vec![];
 
         let payload_len = payload.len();
@@ -144,11 +144,14 @@ impl SnifferDevice {
             dump(buffer.as_slice(), buffer.len());
         }
 
-        let bytes_written = self.handle.write_bulk(
-            self.out_address,
-            &buffer[0..buffer[0] as usize],
-            Duration::from_millis(250),
-        ).or_else(|e| {return Err(SnifferError::UsbError(e))})?;
+        let bytes_written = self
+            .handle
+            .write_bulk(
+                self.out_address,
+                &buffer[0..buffer[0] as usize],
+                Duration::from_millis(250),
+            )
+            .or_else(|e| return Err(SnifferError::UsbError(e)))?;
 
         if bytes_written != buffer.len() {
             return Err(SnifferError::DeviceError);
@@ -166,7 +169,8 @@ impl SnifferDevice {
                 }
 
                 if self.debug {
-                    dump(read_buffer.as_slice(), (read_buffer[0] + 1) as usize); // Byte extra for total length
+                    dump(read_buffer.as_slice(), (read_buffer[0] + 1) as usize);
+                    // Byte extra for total length
                 }
 
                 if read_buffer[2] != ack as u8 {
@@ -175,16 +179,15 @@ impl SnifferDevice {
 
                 Ok(())
             }
-            Err(e) => {
-                Err(SnifferError::UsbError(e))
-            }
+            Err(e) => Err(SnifferError::UsbError(e)),
         }
     }
 
     pub fn receive_packet(&self) -> Result<Vec<u8>, SnifferError> {
         let mut buffer = vec![0; 256];
 
-        let read_result = self.handle.read_bulk(self.in_address,
+        let read_result = self.handle.read_bulk(
+            self.in_address,
             buffer.as_mut_slice(),
             Duration::from_millis(1000),
         );
@@ -201,7 +204,7 @@ impl SnifferDevice {
                 // [len-1] = Checksum - last byte is a checksum
 
                 if n == 0 {
-                    return Err(SnifferError::ProtocolError("empty read"))
+                    return Err(SnifferError::ProtocolError("empty read"));
                 }
 
                 if buffer[0] != buffer[1] {
@@ -213,19 +216,19 @@ impl SnifferDevice {
                     dump(buffer.as_slice(), buffer[0] as usize);
                 }
 
-                if buffer[2] != CmdCodes::CmdGotPkt as u8{
+                if buffer[2] != CmdCodes::CmdGotPkt as u8 {
                     println!("Unexpected result {:#04x}", buffer[2]);
                     return Err(SnifferError::ProtocolError("Unexpected command code"));
                 }
 
-                buffer.drain((n-1)..); // Drop the unused part
+                buffer.drain((n - 1)..); // Drop the unused part
                 buffer.drain(..3); // Drop the metadata
                 Ok(buffer)
-            },
+            }
             Err(e) => match e {
                 rusb::Error::Timeout => Err(SnifferError::TimeOut),
-                _ => Err(e.into())
-            }
+                _ => Err(e.into()),
+            },
         }
     }
 
@@ -249,11 +252,14 @@ fn dump(buffer: &[u8], len: usize) {
     println!("{}", String::from_utf8_lossy(&outbuf))
 }
 
-fn find_first_endpoint<'a>(interface_descriptor: &'a InterfaceDescriptor<'a>, direction: Direction) -> Result<EndpointDescriptor, Box<SnifferError>> {
+fn find_first_endpoint<'a>(
+    interface_descriptor: &'a InterfaceDescriptor<'a>,
+    direction: Direction,
+) -> Result<EndpointDescriptor, Box<SnifferError>> {
     return interface_descriptor
         .endpoint_descriptors()
         .find(|endpoint| {
             return endpoint.direction() == direction;
         })
-        .ok_or_else(|| Box::new(SnifferError::DeviceError))
+        .ok_or_else(|| Box::new(SnifferError::DeviceError));
 }
