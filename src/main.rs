@@ -17,6 +17,7 @@ use std::{error::Error, thread};
 
 mod pcaptap;
 mod sniffer;
+mod protocol;
 
 const VENDOR: u16 = 0x0451; // Texas Instruments
 const PRODUCT: u16 = 0x16a8; // CC2531 USB Stick
@@ -133,8 +134,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                         Ok(dt) => dt,
                         Err(_) => panic!("SystemTime before UNIX EPOCH!"),
                     };
-
-
 
                 // First two bytes are RSSI (dbm) and link quality index
                 let mut packet_data = n.to_vec();

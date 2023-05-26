@@ -7,6 +7,8 @@ use rusb::{
 use std::fmt::Debug;
 use std::time::Duration;
 use std::{error, fmt};
+use std::io::{Error, Read, Write};
+use std::io::ErrorKind::{Other, TimedOut};
 
 #[repr(u8)]
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
@@ -51,6 +53,7 @@ pub struct SnifferDevice {
     out_address: u8,
     in_address: u8,
     debug: bool,
+    timeout: Duration,
 }
 
 #[derive(Debug)]
@@ -103,6 +106,7 @@ impl SnifferDevice {
             out_address: out_endpoint.address(),
             in_address: in_endpoint.address(),
             debug: false,
+            timeout: Duration::from_millis(250)
         });
     }
 
@@ -234,6 +238,36 @@ impl SnifferDevice {
 
     pub fn set_debug(&mut self) {
         self.debug = true;
+    }
+}
+
+impl Write for SnifferDevice {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.handle
+            .write_bulk(self.out_address, buf, self.timeout)
+            .map_err(|e| {
+                match e {
+                    rusb::Error::Timeout => Error::new(TimedOut, e),
+                _ => Error::new(Other, e)
+                }
+            })
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(()) // Nothing to do
+    }
+}
+
+impl Read for SnifferDevice {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.handle
+            .read_bulk(self.in_address, buf, self.timeout)
+            .map_err(|e| {
+                match e {
+                    rusb::Error::Timeout => Error::new(TimedOut, e),
+                    _ => Error::new(Other, e)
+                }
+            })
     }
 }
 
